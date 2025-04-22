@@ -1,0 +1,32 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="utf-8">
+    <title>Landmark Triangulation</title>
+    <link rel="stylesheet" href="style.css">
+  </head>
+  <body>
+
+    <h3>Landmark Triangulation</h3>
+    <p>Enter two distances from different spots, hit “Record” each time, to compute the landmark positions, then activate one waypoint.</p>
+
+    <div>
+      <label>Distance 1:
+        <input type="number" id="dist1" step="any" placeholder="meters">
+      </label>
+      <button id="btn1">Record 1</button>
+    </div>
+
+    <div style="margin-top: .5rem;">
+      <label>Distance 2:
+        <input type="number" id="dist2" step="any" placeholder="meters">
+      </label>
+      <button id="btn2">Record 2</button>
+    </div>
+
+    <div id="result"></div>
+    <div id="switcher"></div>
+
+    <script src="scripts.js"></script>
+  </body>
+</html>

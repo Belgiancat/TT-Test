@@ -1,0 +1,22 @@
+body {
+    font-family: sans-serif;
+    padding: 1rem;
+  }
+  
+  input {
+    width: 5rem;
+  }
+  
+  #result {
+    white-space: pre-wrap;
+    margin-top: 1rem;
+  }
+  
+  #switcher {
+    margin-top: 1rem;
+  }
+  
+  #switcher button {
+    margin-right: 0.5rem;
+  }
+  
