@@ -13,17 +13,19 @@ class Vector3 {
 if (typeof getData !== 'function') {
   window.getData = ({ onSuccess }) => {
     console.warn('[Stub] getData() used');
-    onSuccess({
-      pos_x: Math.random() * 100,
-      pos_y: Math.random() * 100,
-      pos_z: 0
-    });
+    onSuccess({ pos_x: Math.random() * 100, pos_y: Math.random() * 100, pos_z: 0 });
   };
 }
 if (typeof sendCommand !== 'function') {
   window.sendCommand = (cmd) => {
     console.warn('[Stub] sendCommand()', cmd);
-    alert(`(Stub) Would set waypoint at: (${cmd.x.toFixed(2)}, ${cmd.y.toFixed(2)})`);
+    if (cmd.type === 'notification') {
+      alert(`(Stub) Notification: ${cmd.text}`);
+    } else if (cmd.type === 'sendCommand') {
+      alert(`(Stub) Console cmd: ${cmd.command}`);
+    } else {
+      alert(`(Stub) Would set waypoint at: (${cmd.x.toFixed(2)}, ${cmd.y.toFixed(2)})`);
+    }
   };
 }
 
@@ -34,7 +36,7 @@ function getPos() {
         if (data.pos_x !== undefined && data.pos_y !== undefined && data.pos_z !== undefined) {
           resolve({ pos_x: data.pos_x, pos_y: data.pos_y, pos_z: data.pos_z });
         } else {
-          reject("Position data missing");
+          reject('Position data missing');
         }
       },
       onError: reject
@@ -44,18 +46,16 @@ function getPos() {
 
 let measurements = [];
 let intersections = [];
+const resultEl = document.getElementById('result');
+const switcher = document.getElementById('switcher');
 
 document.getElementById('btn1').addEventListener('click', () => {
   const d = parseFloat(document.getElementById('dist1').value);
   if (isNaN(d)) return alert('Please enter a valid number for Distance 1');
   getPos().then(data => {
-    measurements[0] = {
-      pos: new Vector3(data.pos_x, data.pos_y, data.pos_z),
-      r: d
-    };
-    document.getElementById('result').textContent =
-      `✔ Recorded #1 at ${measurements[0].pos.toString()}, r₁=${d}m`;
-    document.getElementById('switcher').innerHTML = '';
+    measurements[0] = { pos: new Vector3(data.pos_x, data.pos_y, data.pos_z), r: d };
+    resultEl.textContent = `✔ Recorded #1 at ${measurements[0].pos.toString()}, r₁=${d}m`;
+    switcher.innerHTML = '';
   }).catch(() => alert('Failed to get position for measurement 1'));
 });
 
@@ -63,12 +63,8 @@ document.getElementById('btn2').addEventListener('click', () => {
   const d = parseFloat(document.getElementById('dist2').value);
   if (isNaN(d)) return alert('Please enter a valid number for Distance 2');
   getPos().then(data => {
-    measurements[1] = {
-      pos: new Vector3(data.pos_x, data.pos_y, data.pos_z),
-      r: d
-    };
-    document.getElementById('result').textContent +=
-      `\n✔ Recorded #2 at ${measurements[1].pos.toString()}, r₂=${d}m\n`;
+    measurements[1] = { pos: new Vector3(data.pos_x, data.pos_y, data.pos_z), r: d };
+    resultEl.textContent += `\n✔ Recorded #2 at ${measurements[1].pos.toString()}, r₂=${d}m\n`;
     computeLandmark();
   }).catch(() => alert('Failed to get position for measurement 2'));
 });
@@ -79,8 +75,6 @@ function computeLandmark() {
   const { pos: p2, r: r2 } = m2;
   const dx = p2.x - p1.x, dy = p2.y - p1.y;
   const d = Math.hypot(dx, dy);
-  const resultEl = document.getElementById('result');
-  const switcher = document.getElementById('switcher');
   switcher.innerHTML = '';
   intersections = [];
 
@@ -94,22 +88,22 @@ function computeLandmark() {
   const ym = p1.y + (a * dy) / d;
   const ox = -dy * (h / d);
   const oy = dx * (h / d);
-
   const pA = new Vector3(xm + ox, ym + oy, (p1.z + p2.z) / 2);
   const pB = new Vector3(xm - ox, ym - oy, (p1.z + p2.z) / 2);
   intersections = [pA, pB];
 
-  resultEl.textContent +=
-    `Possible landmark locations:\n` +
-    `A: ${pA.toString()}\n` +
-    `B: ${pB.toString()}\n`;
-
+  resultEl.textContent += `Possible landmark locations:\nA: ${pA.toString()}\nB: ${pB.toString()}\n`;
   ['A', 'B'].forEach((label, i) => {
     const btn = document.createElement('button');
     btn.textContent = `Activate Location ${label}`;
     btn.addEventListener('click', () => {
       const p = intersections[i];
-      sendCommand({ type: "setWaypoint", x: p.x, y: p.y });
+      // Notify player
+      sendCommand({ type: 'notification', text: `Setting waypoint to (${p.x.toFixed(1)}, ${p.y.toFixed(1)})` });
+      // Official setWaypoint
+      sendCommand({ type: 'setWaypoint', x: p.x, y: p.y });
+      // Fallback via console command
+      sendCommand({ type: 'sendCommand', command: `SetNewWaypoint ${p.x.toFixed(1)} ${p.y.toFixed(1)}` });
       resultEl.textContent = `Waypoint set to Location ${label}: ${p.toString()}`;
     });
     switcher.appendChild(btn);
