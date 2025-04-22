@@ -9,34 +9,22 @@ class Vector3 {
   }
 }
 
-// Compatibility fallback for testing in browser
+// Fallback stubs for in-browser testing
 if (typeof getData !== 'function') {
-  window.getData = ({ onSuccess }) => {
-    console.warn('[Stub] getData() used');
-    onSuccess({ pos_x: Math.random() * 100, pos_y: Math.random() * 100, pos_z: 0 });
-  };
+  window.getData = ({ onSuccess }) => onSuccess({ pos_x: 0, pos_y: 0, pos_z: 0 });
 }
 if (typeof sendCommand !== 'function') {
-  window.sendCommand = (cmd) => {
-    console.warn('[Stub] sendCommand()', cmd);
-    if (cmd.type === 'notification') {
-      alert(`(Stub) Notification: ${cmd.text}`);
-    } else if (cmd.type === 'sendCommand') {
-      alert(`(Stub) Console cmd: ${cmd.command}`);
-    } else {
-      alert(`(Stub) Would set waypoint at: (${cmd.x.toFixed(2)}, ${cmd.y.toFixed(2)})`);
-    }
-  };
+  window.sendCommand = cmd => console.log('[Stub sendCommand]', cmd);
 }
 
 function getPos() {
   return new Promise((resolve, reject) => {
     getData({
-      onSuccess: (data) => {
-        if (data.pos_x !== undefined && data.pos_y !== undefined && data.pos_z !== undefined) {
-          resolve({ pos_x: data.pos_x, pos_y: data.pos_y, pos_z: data.pos_z });
+      onSuccess: data => {
+        if (data.pos_x == null || data.pos_y == null || data.pos_z == null) {
+          reject('Missing position data');
         } else {
-          reject('Position data missing');
+          resolve({ pos_x: data.pos_x, pos_y: data.pos_y, pos_z: data.pos_z });
         }
       },
       onError: reject
@@ -49,63 +37,69 @@ let intersections = [];
 const resultEl = document.getElementById('result');
 const switcher = document.getElementById('switcher');
 
-document.getElementById('btn1').addEventListener('click', () => {
-  const d = parseFloat(document.getElementById('dist1').value);
-  if (isNaN(d)) return alert('Please enter a valid number for Distance 1');
-  getPos().then(data => {
-    measurements[0] = { pos: new Vector3(data.pos_x, data.pos_y, data.pos_z), r: d };
-    resultEl.textContent = `✔ Recorded #1 at ${measurements[0].pos.toString()}, r₁=${d}m`;
+// Record measurement #1
+btn1.addEventListener('click', () => {
+  const r1 = parseFloat(dist1.value);
+  if (isNaN(r1)) return alert('Enter a valid number for Distance #1');
+  getPos().then(p => {
+    measurements[0] = { pos: new Vector3(p.pos_x, p.pos_y, p.pos_z), r: r1 };
+    resultEl.textContent = `✔#1 @ ${measurements[0].pos} r₁=${r1}m`;
     switcher.innerHTML = '';
-  }).catch(() => alert('Failed to get position for measurement 1'));
+  }).catch(err => alert('Error getting position #1: ' + err));
 });
 
-document.getElementById('btn2').addEventListener('click', () => {
-  const d = parseFloat(document.getElementById('dist2').value);
-  if (isNaN(d)) return alert('Please enter a valid number for Distance 2');
-  getPos().then(data => {
-    measurements[1] = { pos: new Vector3(data.pos_x, data.pos_y, data.pos_z), r: d };
-    resultEl.textContent += `\n✔ Recorded #2 at ${measurements[1].pos.toString()}, r₂=${d}m\n`;
+// Record measurement #2 and compute
+btn2.addEventListener('click', () => {
+  const r2 = parseFloat(dist2.value);
+  if (isNaN(r2)) return alert('Enter a valid number for Distance #2');
+  getPos().then(p => {
+    measurements[1] = { pos: new Vector3(p.pos_x, p.pos_y, p.pos_z), r: r2 };
+    resultEl.textContent += `\n✔#2 @ ${measurements[1].pos} r₂=${r2}m`;
     computeLandmark();
-  }).catch(() => alert('Failed to get position for measurement 2'));
+  }).catch(err => alert('Error getting position #2: ' + err));
 });
 
 function computeLandmark() {
   const [m1, m2] = measurements;
-  const { pos: p1, r: r1 } = m1;
-  const { pos: p2, r: r2 } = m2;
-  const dx = p2.x - p1.x, dy = p2.y - p1.y;
+  const dx = m2.pos.x - m1.pos.x;
+  const dy = m2.pos.y - m1.pos.y;
   const d = Math.hypot(dx, dy);
-  switcher.innerHTML = '';
-  intersections = [];
-
-  if (d > r1 + r2 || d < Math.abs(r1 - r2)) {
-    return alert('No intersection of the two distance‑circles in the XY plane.');
+  if (d > m1.r + m2.r || d < Math.abs(m1.r - m2.r)) {
+    return alert('No circle intersection for given distances.');
   }
 
-  const a = (r1 * r1 - r2 * r2 + d * d) / (2 * d);
-  const h = Math.sqrt(Math.max(0, r1 * r1 - a * a));
-  const xm = p1.x + (a * dx) / d;
-  const ym = p1.y + (a * dy) / d;
-  const ox = -dy * (h / d);
-  const oy = dx * (h / d);
-  const pA = new Vector3(xm + ox, ym + oy, (p1.z + p2.z) / 2);
-  const pB = new Vector3(xm - ox, ym - oy, (p1.z + p2.z) / 2);
-  intersections = [pA, pB];
+  const a = (m1.r*m1.r - m2.r*m2.r + d*d) / (2*d);
+  const h = Math.sqrt(Math.max(0, m1.r*m1.r - a*a));
+  const xm = m1.pos.x + (a*dx)/d;
+  const ym = m1.pos.y + (a*dy)/d;
+  const ox = -dy*(h/d);
+  const oy = dx*(h/d);
 
-  resultEl.textContent += `Possible landmark locations:\nA: ${pA.toString()}\nB: ${pB.toString()}\n`;
-  ['A', 'B'].forEach((label, i) => {
+  const zAvg = (m1.pos.z + m2.pos.z) / 2;
+  intersections = [
+    new Vector3(xm + ox, ym + oy, zAvg),
+    new Vector3(xm - ox, ym - oy, zAvg)
+  ];
+
+  resultEl.textContent += `\nPossible locations:\nA: ${intersections[0]}\nB: ${intersections[1]}`;
+  switcher.innerHTML = '';
+
+  ['A','B'].forEach((lbl,i) => {
     const btn = document.createElement('button');
-    btn.textContent = `Activate Location ${label}`;
-    btn.addEventListener('click', () => {
-      const p = intersections[i];
-      // Notify player
-      sendCommand({ type: 'notification', text: `Setting waypoint to (${p.x.toFixed(1)}, ${p.y.toFixed(1)})` });
-      // Official setWaypoint
-      sendCommand({ type: 'setWaypoint', x: p.x, y: p.y });
-      // Fallback via console command
-      sendCommand({ type: 'sendCommand', command: `SetNewWaypoint ${p.x.toFixed(1)} ${p.y.toFixed(1)}` });
-      resultEl.textContent = `Waypoint set to Location ${label}: ${p.toString()}`;
-    });
+    btn.textContent = `Activate ${lbl}`;
+    btn.onclick = () => setWaypoint(i, lbl);
     switcher.appendChild(btn);
   });
+}
+
+function setWaypoint(idx, label) {
+  const p = intersections[idx];
+  // 1) show elevation
+  sendCommand({ type: 'notification', text: `Target ${label}: Z=${p.z.toFixed(1)}m (map ignores height)` });
+  // 2) official map waypoint (2D)
+  sendCommand({ type: 'setWaypoint', x: p.x, y: p.y });
+  // 3) share local data for external 3D marker scripts
+  sendCommand({ type: 'shareLocalData', key: 'landmark', value: `${p.x},${p.y},${p.z}` });
+
+  resultEl.textContent = `Waypoint set XY to ${p.x.toFixed(2)},${p.y.toFixed(2)}; elevation ${p.z.toFixed(2)}m`;
 }
