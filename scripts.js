@@ -1,106 +1,114 @@
+// Minimal Vector3 with necessary operations
 class Vector3 {
-  constructor(x = 0, y = 0, z = 0) {
-    this.x = x;
-    this.y = y;
-    this.z = z;
+  constructor(x=0,y=0,z=0){this.x=x;this.y=y;this.z=z;}
+  clone(){return new Vector3(this.x,this.y,this.z);}
+  add(v){this.x+=v.x;this.y+=v.y;this.z+=v.z;return this;}
+  sub(v){this.x-=v.x;this.y-=v.y;this.z-=v.z;return this;}
+  multiplyScalar(s){this.x*=s;this.y*=s;this.z*=s;return this;}
+  length(){return Math.hypot(this.x,this.y,this.z);}
+  normalize(){const len=this.length();return len>0?this.multiplyScalar(1/len):this;}
+  cross(v){
+    const x=this.y*v.z - this.z*v.y;
+    const y=this.z*v.x - this.x*v.z;
+    const z=this.x*v.y - this.y*v.x;
+    this.x=x; this.y=y; this.z=z;
+    return this;
   }
-  toString() {
-    return `(${this.x.toFixed(2)}, ${this.y.toFixed(2)}, ${this.z.toFixed(2)})`;
-  }
+  toString(){return `(${this.x.toFixed(2)},${this.y.toFixed(2)},${this.z.toFixed(2)})`;}
 }
 
-// Fallback stubs for browser testing
-if (typeof getData !== 'function') {
-  window.getData = ({ onSuccess }) => onSuccess({ pos_x: 0, pos_y: 0, pos_z: 0 });
-}
-if (typeof sendCommand !== 'function') {
-  window.sendCommand = cmd => console.log('[Stub sendCommand]', cmd);
-}
+// API fallback for browser
+if(typeof getData!=='function') window.getData = ({onSuccess}) => onSuccess({
+  pos_x: 0, pos_y: 0, pos_z: 0, altitude: 0
+});
+if(typeof sendCommand!=='function') window.sendCommand = cmd => console.log('[sendCommand]',cmd);
 
-function getPos() {
-  return new Promise((resolve, reject) => {
+// Fetch full position data
+function fetchPosition(){
+  return new Promise((res,rej)=>{
     getData({
-      onSuccess: data => {
-        if (data.pos_x == null || data.pos_y == null || data.pos_z == null) {
-          reject('Missing position data');
-        } else {
-          resolve(new Vector3(data.pos_x, data.pos_y, data.pos_z));
-        }
+      onSuccess:data=>{
+        if(data.pos_x==null||data.pos_y==null||data.pos_z==null) return rej('Missing pos');
+        // include altitude if present
+        res(new Vector3(data.pos_x,data.pos_y,data.pos_z));
       },
-      onError: reject
+      onError: err=>rej(err)
     });
   });
 }
 
-let measurements = [];
-let intersections = [];
-const resultEl = document.getElementById('result');
-const switcher = document.getElementById('switcher');
+// Compute 3D intersection of two spheres
+function intersectSpheres(c1,r1,c2,r2){
+  // vector between centers
+  const u = c2.clone().sub(c1);
+  const d = u.length();
+  if(d > r1+r2 || d < Math.abs(r1-r2)) throw new Error('No intersection');
+  u.normalize();
+  const a = (r1*r1 - r2*r2 + d*d) / (2*d);
+  const C = c1.clone().add(u.clone().multiplyScalar(a));
+  const h = Math.sqrt(Math.max(0, r1*r1 - a*a));
+  // build perpendicular basis
+  let arb = Math.abs(u.x)<0.9? new Vector3(1,0,0) : new Vector3(0,1,0);
+  const v = u.clone().cross(arb).normalize();
+  // two antipodal points on the circle
+  const pA = C.clone().add(v.clone().multiplyScalar(h));
+  const pB = C.clone().sub(v.clone().multiplyScalar(h));
+  return [pA,pB];
+}
 
-btn1.addEventListener('click', () => {
-  const r = parseFloat(dist1.value);
-  if (isNaN(r)) return alert('Enter a valid number for Distance #1');
-  getPos().then(pos => {
-    measurements[0] = { pos, r };
-    resultEl.textContent = `✔ #1 @ ${pos}  r₁=${r}m`;
-    switcher.innerHTML = '';
-  }).catch(err => alert('Error #1: ' + err));
-});
+// UI and state
+const dist1 = document.getElementById('dist1');
+const dist2 = document.getElementById('dist2');
+const btn1 = document.getElementById('btn1');
+const btn2 = document.getElementById('btn2');
+const result = document.getElementById('result');
+const actions = document.getElementById('actions');
+let m1, m2;
 
-btn2.addEventListener('click', () => {
-  const r = parseFloat(dist2.value);
-  if (isNaN(r)) return alert('Enter a valid number for Distance #2');
-  getPos().then(pos => {
-    measurements[1] = { pos, r };
-    resultEl.textContent += `\n✔ #2 @ ${pos}  r₂=${r}m`;
-    computeLandmark();
-  }).catch(err => alert('Error #2: ' + err));
-});
+btn1.onclick = async()=>{
+  const r=parseFloat(dist1.value);
+  if(isNaN(r)||r<=0) return alert('Invalid distance #1');
+  try{
+    const pos = await fetchPosition();
+    m1={pos,r};
+    result.textContent = `#1 at ${pos} r=${r}m`;
+    actions.innerHTML='';
+  }catch(e){alert('Error fetching pos #1:'+e);}
+};
 
-function computeLandmark() {
-  const [m1, m2] = measurements;
-  const dx = m2.pos.x - m1.pos.x;
-  const dy = m2.pos.y - m1.pos.y;
-  const d = Math.hypot(dx, dy);
-  if (d > m1.r + m2.r || d < Math.abs(m1.r - m2.r)) {
-    return alert('No intersection of circles');
-  }
-  const a = (m1.r*m1.r - m2.r*m2.r + d*d) / (2*d);
-  const h = Math.sqrt(Math.max(0, m1.r*m1.r - a*a));
-  const xm = m1.pos.x + (a * dx) / d;
-  const ym = m1.pos.y + (a * dy) / d;
-  const ox = -dy * (h / d);
-  const oy = dx * (h / d);
-  const zAvg = (m1.pos.z + m2.pos.z) / 2;
+btn2.onclick = async()=>{
+  const r=parseFloat(dist2.value);
+  if(isNaN(r)||r<=0) return alert('Invalid distance #2');
+  if(!m1) return alert('Record #1 first');
+  try{
+    const pos = await fetchPosition();
+    m2={pos,r};
+    result.textContent += `\n#2 at ${pos} r=${r}m`;
+    showIntersections();
+  }catch(e){alert('Error fetching pos #2:'+e);}
+};
 
-  intersections = [
-    new Vector3(xm + ox, ym + oy, zAvg),
-    new Vector3(xm - ox, ym - oy, zAvg)
-  ];
+function showIntersections(){
+  actions.innerHTML='';
+  let pts;
+  try{ pts = intersectSpheres(m1.pos,m1.r,m2.pos,m2.r); }
+  catch(e){ return alert(e.message); }
+  result.textContent += `\nIntersection points:`+
+    `\nA: ${pts[0]}`+
+    `\nB: ${pts[1]}`;
 
-  resultEl.textContent += `\nPossible locations:\nA: ${intersections[0]}\nB: ${intersections[1]}`;
-  switcher.innerHTML = '';
-  ['A','B'].forEach((lbl,i) => {
-    const btn = document.createElement('button');
-    btn.textContent = `Activate ${lbl}`;
-    btn.onclick = () => setWaypoint(i, lbl);
-    switcher.appendChild(btn);
+  ['A','B'].forEach((lbl,i)=>{
+    const b=document.createElement('button');
+    b.textContent = `Waypoint ${lbl}`;
+    b.onclick = ()=>set3DWaypoint(pts[i],lbl);
+    actions.appendChild(b);
   });
 }
 
-function setWaypoint(idx, label) {
-  const p = intersections[idx];
-  // Show the full XYZ coordinate in map notification
-  sendCommand({
-    type: 'notification',
-    text: `Setting waypoint to X=${p.x.toFixed(1)}, Y=${p.y.toFixed(1)}, Z=${p.z.toFixed(1)}`
-  });
-  // Set a true 3D waypoint
-  sendCommand({
-    type: 'setWaypoint',
-    x: p.x,
-    y: p.y,
-    z: p.z
-  });
-  resultEl.textContent = `Waypoint set to ${p}`;
+function set3DWaypoint(p,label){
+  // send full 3D waypoint
+  sendCommand({type:'setWaypoint',x:p.x,y:p.y,z:p.z});
+  // notify user
+  sendCommand({type:'notification',text:`Waypoint ${label}: ${p}`});
+  result.textContent = `Waypoint set to ${label}: ${p}`;
 }
