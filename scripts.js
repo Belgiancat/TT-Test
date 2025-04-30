@@ -1,5 +1,7 @@
 // recieve data
 
+const results = document.querySelector("#result");
+
 let data = {};
 
 window.addEventListener("message", (event) => {
@@ -67,6 +69,8 @@ function calc() {
     y: s1.y + x * exNorm[1] + y * ey[1] + z * ez[1],
     z: s1.z + x * exNorm[2] + y * ey[2] + z * ez[2]
   };
+
+  results.innerHTML = "";
 
   window.parent.postMessage({ type: "setWaypont", ...result }, "*");
 }
