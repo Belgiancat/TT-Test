@@ -57,7 +57,9 @@ function calc() {
   const zSquare = s1.d ** 2 - x ** 2 - y ** 2;
 
   if (zSquare < 0) {
-    results.innerHTML = "No real intersection"; // To Do: A way to give information to user
+    results.innerHTML = "No real intersection";
+    posList.length = 0;
+    return;
   }
 
   const z = Math.sqrt(zSquare);
@@ -71,6 +73,6 @@ function calc() {
 
   results.innerHTML = JSON.stringify(intersection, null, 2);
 
-  window.parent.postMessage({ type: "setWaypoint", ...result }, "*");
-  posList.clear();
+  window.parent.postMessage({ type: "setWaypoint", ...intersection }, "*");
+  posList.length = 0;
 }
