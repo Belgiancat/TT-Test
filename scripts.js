@@ -23,7 +23,7 @@ const posList = [];
 document.querySelector("#record").addEventListener("click", () => {
   const distance = parseFloat(document.querySelector("#distance").value);
   posList.push({ x: data.pos_x, y: data.pos_y, z: data.pos_z, d: distance });
-  if (posList.length > 2) { calc(); }
+  if (posList.length > 2) { calc(); posList.clear(); };
 });
 
 // math
@@ -57,20 +57,19 @@ function calc() {
   const zSquare = s1.d ** 2 - x ** 2 - y ** 2;
 
   if (zSquare < 0) {
-    return; // No real intersection 
-    // To Do: A way to give information to user
+    results.innerHTML = "No real intersection"; // To Do: A way to give information to user
   }
 
   const z = Math.sqrt(zSquare);
 
   // Compute result in original coordinate system
-  const result = {
+  const intersection = {
     x: s1.x + x * exNorm[0] + y * ey[0] + z * ez[0],
     y: s1.y + x * exNorm[1] + y * ey[1] + z * ez[1],
     z: s1.z + x * exNorm[2] + y * ey[2] + z * ez[2]
   };
 
-  results.innerHTML = JSON.stringify(result);
+  results.innerHTML = JSON.stringify(intersection, null, 2);
 
   window.parent.postMessage({ type: "setWaypoint", ...result }, "*");
 }
