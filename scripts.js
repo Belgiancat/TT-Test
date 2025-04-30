@@ -70,7 +70,7 @@ function calc() {
     z: s1.z + x * exNorm[2] + y * ey[2] + z * ez[2]
   };
 
-  results.innerHTML = "";
+  results.innerHTML = JSON.stringify(result);
 
   window.parent.postMessage({ type: "setWaypont", ...result }, "*");
 }
