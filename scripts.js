@@ -23,7 +23,7 @@ const posList = [];
 document.querySelector("#record").addEventListener("click", () => {
   const distance = parseFloat(document.querySelector("#distance").value);
   posList.push({ x: data.pos_x, y: data.pos_y, z: data.pos_z, d: distance });
-  if (posList.lenght > 2) { calc(); }
+  if (posList.length > 2) { calc(); }
 });
 
 // math
@@ -72,5 +72,5 @@ function calc() {
 
   results.innerHTML = JSON.stringify(result);
 
-  window.parent.postMessage({ type: "setWaypont", ...result }, "*");
+  window.parent.postMessage({ type: "setWaypoint", ...result }, "*");
 }
