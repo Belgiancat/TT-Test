@@ -1,4 +1,8 @@
-// recieve data
+// ←– Replace this with your own private key (needs “map/positions.json” access)
+const API_KEY = "0dIZ16tMp3wbPhbVlDeUdLWvkAq6BweeNSf1a";
+const API_ORIGIN = "https://v1.api.tycoon.community/main";
+
+// receive data
 const results = document.querySelector("#result");
 let data = {};
 window.addEventListener("message", (event) => {
@@ -7,119 +11,143 @@ window.addEventListener("message", (event) => {
   }
 });
 window.addEventListener("load", () => {
-  window.parent.postMessage({ type: "getNamedData", keys: ["pos_x", "pos_y", "pos_z"] }, "*");
+  window.parent.postMessage({ type: "getNamedData", keys: ["pos_x", "pos_y", "pos_z", "vRP_id"] }, "*");
 });
 
 // record data
 const posList = [];
-document.querySelector("#record").addEventListener("click", () => {
+document.querySelector("#record").addEventListener("click", async () => {
   const distance = parseFloat(document.querySelector("#distance").value);
-  posList.push({ x: data.pos_x, y: data.pos_y, z: data.pos_z, d: distance });
-  results.innerHTML = "You have " + posList.length + " listings recorded";
-  if (posList.length > 2) { calc(); }
+  // fetch our full history from the TT API :contentReference[oaicite:2]{index=2}
+  const resp = await fetch(API_ORIGIN + "/map/positions.json", {
+    headers: { "X-Tycoon-Key": API_KEY }
+  });
+  const json = await resp.json();
+  // find our player by vRP id
+  const me = json.players.find(p => p[2] === data.vRP_id);
+  if (!me) {
+    results.innerHTML = "Could not find your player in /map/positions.json";
+    return;
+  }
+  // me[3] = current position, me[6] = history array [[idx,x,y,z],…]
+  const cur = me[3], hist = me[6] || [];
+  // push current + all history as separate “sensors”
+  posList.push({ x: cur.x, y: cur.y, z: cur.z, d: distance });
+  for (const step of hist) {
+    posList.push({ x: step[1], y: step[2], z: step[3], d: distance });
+  }
+  results.innerHTML = "You have " + posList.length + " total samples recorded";
+  if (posList.length > 3) calc();
 });
 
 // math function
-function calc() {
+async function calc() {
   const EPS = 1e-6;
 
-  // the existing 3-point solver (unchanged)
-  function solveTriple([s1, s2, s3]) {
-    const toVec = (a, b) => [b.x - a.x, b.y - a.y, b.z - a.z];
-    const dot = (v1, v2) => v1.reduce((sum, v, i) => sum + v * v2[i], 0);
-    const cross = (v1, v2) => [
-      v1[1] * v2[2] - v1[2] * v2[1],
-      v1[2] * v2[0] - v1[0] * v2[2],
-      v1[0] * v2[1] - v1[1] * v2[0]
-    ];
-
-    // basis
-    const ex = toVec(s1, s2);
-    const d = Math.hypot(...ex);
-    const exNorm = ex.map(e => e / d);
-    const i = dot(exNorm, toVec(s1, s3));
-    const temp = toVec(s1, s3).map((v, idx) => v - i * exNorm[idx]);
-    const ey = temp.map(v => v / Math.hypot(...temp));
-    const ez = cross(exNorm, ey);
-    const j = dot(ey, toVec(s1, s3));
-
-    if (Math.abs(j) < EPS) throw new Error("collinear");
-
-    // circle center in plane
-    const x = (s1.d ** 2 - s2.d ** 2 + d ** 2) / (2 * d);
-    const y = (s1.d ** 2 - s3.d ** 2 + i ** 2 + j ** 2 - 2 * i * x) / (2 * j);
-
-    // z
-    let z2 = s1.d ** 2 - x ** 2 - y ** 2;
-    if (z2 < -EPS) throw new Error("no-solution");
-    z2 = Math.max(0, z2);
-    const z = Math.sqrt(z2);
-
-    // two mirror solutions, pick best residual
-    const cands = [z, -z].map(zv => ({
-      x: s1.x + x * exNorm[0] + y * ey[0] + zv * ez[0],
-      y: s1.y + x * exNorm[1] + y * ey[1] + zv * ez[1],
-      z: s1.z + x * exNorm[2] + y * ey[2] + zv * ez[2]
-    }));
-    let best = null, bestErr = Infinity;
-    for (const P of cands) {
-      const err = [s1, s2, s3].reduce((sum, s) => {
-        const dist = Math.hypot(P.x - s.x, P.y - s.y, P.z - s.z);
-        return sum + (dist - s.d) ** 2;
-      }, 0);
-      if (err < bestErr) { bestErr = err; best = P; }
+  // 1) initial linear least-squares (as before)
+  function solveLinear(sensors) {
+    const s1 = sensors[0], N = sensors.length;
+    const A = [], b = [];
+    for (let i = 1; i < N; i++) {
+      const si = sensors[i];
+      A.push([2 * (si.x - s1.x), 2 * (si.y - s1.y), 2 * (si.z - s1.z)]);
+      b.push(si.d * si.d - s1.d * s1.d +
+        (s1.x * s1.x - si.x * si.x) +
+        (s1.y * s1.y - si.y * si.y) +
+        (s1.z * s1.z - si.z * si.z));
     }
-    return { pt: best, err: bestErr };
-  }
-
-  // generate all combinations of n elements taken k
-  function combinations(arr, k) {
-    if (k === 0) return [[]];
-    if (arr.length < k) return [];
-    const [head, ...tail] = arr;
-    const withHead = combinations(tail, k - 1).map(c => [head, ...c]);
-    const withoutHead = combinations(tail, k);
-    return withHead.concat(withoutHead);
-  }
-
-  let solution, solutionErr = Infinity;
-
-  if (posList.length === 3) {
-    // just solve the triple
-    try {
-      const { pt, err } = solveTriple(posList);
-      solution = pt; solutionErr = err;
-    } catch (e) {
-      solution = null;
-    }
-  } else {
-    // try every triple, pick the one that best fits all sensors :contentReference[oaicite:0]{index=0}
-    for (const triple of combinations(posList, 3)) {
-      try {
-        const { pt, err: triErr } = solveTriple(triple);
-        // compute total error across all readings
-        const totalErr = posList.reduce((sum, s) => {
-          const dAct = Math.hypot(pt.x - s.x, pt.y - s.y, pt.z - s.z);
-          return sum + (dAct - s.d) ** 2;
-        }, 0);
-        if (totalErr < solutionErr) {
-          solutionErr = totalErr;
-          solution = pt;
+    // form normal equations AtA·X = Atb
+    const AtA = [[0, 0, 0], [0, 0, 0], [0, 0, 0]], Atb = [0, 0, 0];
+    for (let i = 0; i < A.length; i++) {
+      for (let j = 0; j < 3; j++) {
+        Atb[j] += A[i][j] * b[i];
+        for (let k = 0; k < 3; k++) {
+          AtA[j][k] += A[i][j] * A[i][k];
         }
-      } catch (_) {
-        // skip degenerate/no-solution triples
       }
     }
+    // invert 3×3 via Cramer's rule
+    const m = AtA;
+    const det = m[0][0] * (m[1][1] * m[2][2] - m[1][2] * m[2][1])
+      - m[0][1] * (m[1][0] * m[2][2] - m[1][2] * m[2][0])
+      + m[0][2] * (m[1][0] * m[2][1] - m[1][1] * m[2][0]);
+    if (Math.abs(det) < EPS) throw new Error("ill-conditioned linear system");
+    const invDet = 1 / det;
+    const inv = [
+      [(m[1][1] * m[2][2] - m[1][2] * m[2][1]) * invDet,
+      -(m[0][1] * m[2][2] - m[0][2] * m[2][1]) * invDet,
+      (m[0][1] * m[1][2] - m[0][2] * m[1][1]) * invDet],
+      [-(m[1][0] * m[2][2] - m[1][2] * m[2][0]) * invDet,
+      (m[0][0] * m[2][2] - m[0][2] * m[2][0]) * invDet,
+      -(m[0][0] * m[1][2] - m[0][2] * m[1][0]) * invDet],
+      [(m[1][0] * m[2][1] - m[1][1] * m[2][0]) * invDet,
+      -(m[0][0] * m[2][1] - m[0][1] * m[2][0]) * invDet,
+      (m[0][0] * m[1][1] - m[0][1] * m[1][0]) * invDet]
+    ];
+    return {
+      x: inv[0][0] * Atb[0] + inv[0][1] * Atb[1] + inv[0][2] * Atb[2],
+      y: inv[1][0] * Atb[0] + inv[1][1] * Atb[1] + inv[1][2] * Atb[2],
+      z: inv[2][0] * Atb[0] + inv[2][1] * Atb[1] + inv[2][2] * Atb[2]
+    };
   }
 
-  if (!solution) {
-    results.innerHTML = "No real intersection, cleared all measurements. Try again!";
+  // 2) Gauss-Newton refine on the true cost Σ(‖X−Si‖−di)² :contentReference[oaicite:3]{index=3}
+  function refineGaussNewton(sensors, init) {
+    let X = [init.x, init.y, init.z];
+    for (let iter = 0; iter < 5; iter++) {
+      // build JᵀJ and Jᵀr
+      const JtJ = [[0, 0, 0], [0, 0, 0], [0, 0, 0]], Jtr = [0, 0, 0];
+      for (const s of sensors) {
+        const dx = X[0] - s.x, dy = X[1] - s.y, dz = X[2] - s.z;
+        const dist = Math.hypot(dx, dy, dz);
+        if (dist < EPS) continue;
+        const r = dist - s.d;
+        const j = [dx / dist, dy / dist, dz / dist];
+        for (let i = 0; i < 3; i++) {
+          for (let k = 0; k < 3; k++) {
+            JtJ[i][k] += j[i] * j[k];
+          }
+          Jtr[i] += j[i] * r;
+        }
+      }
+      // solve JtJ · h = −Jtr
+      const h = solve3x3(JtJ, Jtr.map(v => -v));
+      X[0] += h[0]; X[1] += h[1]; X[2] += h[2];
+    }
+    return { x: X[0], y: X[1], z: X[2] };
+
+    function solve3x3(A, b) {
+      const m = A;
+      const det = m[0][0] * (m[1][1] * m[2][2] - m[1][2] * m[2][1])
+        - m[0][1] * (m[1][0] * m[2][2] - m[1][2] * m[2][0])
+        + m[0][2] * (m[1][0] * m[2][1] - m[1][1] * m[2][0]);
+      if (Math.abs(det) < EPS) return [0, 0, 0];
+      const invDet = 1 / det;
+      // compute adjugate manually...
+      const adj = [
+        [(m[1][1] * m[2][2] - m[1][2] * m[2][1]), -(m[0][1] * m[2][2] - m[0][2] * m[2][1]), (m[0][1] * m[1][2] - m[0][2] * m[1][1])],
+        [-(m[1][0] * m[2][2] - m[1][2] * m[2][0]), (m[0][0] * m[2][2] - m[0][2] * m[2][0]), -(m[0][0] * m[1][2] - m[0][2] * m[1][0])],
+        [(m[1][0] * m[2][1] - m[1][1] * m[2][0]), -(m[0][0] * m[2][1] - m[0][1] * m[2][0]), (m[0][0] * m[1][1] - m[0][1] * m[1][0])]
+      ];
+      return [
+        (adj[0][0] * b[0] + adj[0][1] * b[1] + adj[0][2] * b[2]) * invDet,
+        (adj[1][0] * b[0] + adj[1][1] * b[1] + adj[1][2] * b[2]) * invDet,
+        (adj[2][0] * b[0] + adj[2][1] * b[1] + adj[2][2] * b[2]) * invDet
+      ];
+    }
+  }
+
+  let sol;
+  try {
+    const init = solveLinear(posList);
+    sol = refineGaussNewton(posList, init);
+  } catch (e) {
+    results.innerHTML = "No real intersection—cleared all measurements. Try again!";
     posList.length = 0;
     return;
   }
 
-  // output best solution
-  results.innerHTML = "The coordinates are at " + JSON.stringify(solution, null, 2);
-  window.parent.postMessage({ type: "setWaypoint", ...solution }, "*");
+  results.innerHTML = "The coordinates are at " + JSON.stringify(sol, null, 2);
+  window.parent.postMessage({ type: "setWaypoint", ...sol }, "*");
   posList.length = 0;
 }
