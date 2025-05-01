@@ -23,6 +23,7 @@ const posList = [];
 document.querySelector("#record").addEventListener("click", () => {
   const distance = parseFloat(document.querySelector("#distance").value);
   posList.push({ x: data.pos_x, y: data.pos_y, z: data.pos_z, d: distance });
+  results.innerHTML = "You have " + JSON.stringify(posList.length, null, 2) + " listings recorded";
   if (posList.length > 2) { calc(); };
 });
 
@@ -57,7 +58,7 @@ function calc() {
   const zSquare = s1.d ** 2 - x ** 2 - y ** 2;
 
   if (zSquare < 0) {
-    results.innerHTML = "No real intersection";
+    results.innerHTML = "No real intersection, the listings have been cleared. Try again!";
     posList.length = 0;
     return;
   }
@@ -71,7 +72,7 @@ function calc() {
     z: s1.z + x * exNorm[2] + y * ey[2] + z * ez[2]
   };
 
-  results.innerHTML = JSON.stringify(intersection, null, 2);
+  results.innerHTML = "The coordinates are at " + JSON.stringify(intersection, null, 2);
 
   window.parent.postMessage({ type: "setWaypoint", ...intersection }, "*");
   posList.length = 0;

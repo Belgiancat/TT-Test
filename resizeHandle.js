@@ -5,7 +5,6 @@ document.addEventListener('DOMContentLoaded', () => {
     const backButton = document.querySelector('.back-button');
 
     let isDragging = false,
-        isResizing = false,
         offsetX,
         offsetY;
 
@@ -17,35 +16,22 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     });
 
-    resizeHandle.addEventListener('mousedown', (e) => {
-        isResizing = true;
-        offsetX = e.clientX;
-        offsetY = e.clientY;
-        e.stopPropagation();
-    });
-
     document.addEventListener('mousemove', (e) => {
         windowBg.style.width = windowElement.style.width;
         windowBg.style.height = windowElement.style.height;
 
-        if (isDragging && !isResizing) {
+        if (isDragging) {
             const newLeft = `${e.clientX - offsetX}px`;
             const newTop = `${e.clientY - offsetY}px`;
 
             windowElement.style.left = newLeft;
             windowElement.style.top = newTop;
-
-        } else if (isResizing) {
-            windowElement.style.width = `${windowElement.offsetWidth + (e.clientX - offsetX)}px`;
-            windowElement.style.height = `${windowElement.offsetHeight + (e.clientY - offsetY)}px`;
-            offsetX = e.clientX;
-            offsetY = e.clientY;
         }
+
     });
 
     document.addEventListener('mouseup', () => {
         isDragging = false;
-        isResizing = false;
 
         const left = windowElement.style.left;
         const top = windowElement.style.top;
