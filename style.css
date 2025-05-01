@@ -20,3 +20,18 @@ input {
 #switcher button {
   margin-right: 0.5rem;
 }
+
+.window {
+  position: absolute;
+  border: 1px solid #888;
+}
+
+.resizeHandle {
+  width: 12px;
+  height: 12px;
+  background: #666;
+  position: absolute;
+  bottom: 0;
+  right: 0;
+  cursor: se-resize;
+}
