@@ -9,18 +9,25 @@
 
 <body>
 
-  <div class="resize-handle" id="resizeHandle"> <!-- Put the button and input in the resizeHandle div-->
+  <div id="window" class="window" style="position: absolute;">
+    <div id="window-bg" class="window-bg" href="style.css">
 
-    <button id="record">
-      record position
-    </button>
-    <input type="number" id="distance">
+      <button id="record">
+        record position
+      </button>
 
-    <div id="result"></div>
+      <input type="number" id="distance">
 
+      <div id="result"></div>
+
+      <div class="resize-handle" id="resizeHandle">
+
+
+      </div>
+
+      <script src="scripts.js"></script>
+    </div>
   </div>
-
-  <script src="scripts.js"></script>
 </body>
 
 </html>
