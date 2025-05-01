@@ -1,3 +1,8 @@
+const resizeHandle = document.getElementById('resizeHandle');
+const windowElement = document.getElementById('window');
+const windowBg = document.getElementById('window-bg');
+const backButton = document.querySelector('.back-button');
+
 let isDragging = false,
     isResizing = false,
     offsetX,
