@@ -87,11 +87,8 @@ function computeSolutions() {
   const s1to3 = vecSub(s1, s3);
   const i = vecDot(ex, s1to3);
   const proj = vecScale(ex, i);
-  const orth = vecSub({ x: 0, y: 0, z: 0 }, { x: 0, y: 0, z: 0 });
-  // subtract proj from s1to3
-  orth.x = s1to3.x - proj.x;
-  orth.y = s1to3.y - proj.y;
-  orth.z = s1to3.z - proj.z;
+  // orthogonal component of s1to3 relative to ex
+  const orth = vecSub(s1to3, proj);
 
   if (vecLength(orth) < 1e-6) { results.innerHTML = "Points are colinear."; posList.length = 0; return; }
   const ey = vecNormalize(orth);
