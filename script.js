@@ -24,12 +24,20 @@ function vecCross(v1, v2) {
 function vecLength(v) { return Math.sqrt(vecDot(v, v)); }
 function vecNormalize(v) { const len = vecLength(v); return vecScale(v, 1 / len); }
 
-// Listen for measurement data from FiveM
+// Listen for messages from FiveM
 window.addEventListener("message", (event) => {
-  if (event.data && event.data.type === "measurement") {
-    data.pos_x = event.data.pos_x;
-    data.pos_y = event.data.pos_y;
-    data.pos_z = event.data.pos_z;
+  const msg = event.data;
+  // measurement messages carry latest player position when recording
+  if (msg.type === "measurement") {
+    data.pos_x = msg.pos_x;
+    data.pos_y = msg.pos_y;
+    data.pos_z = msg.pos_z;
+  }
+  // response to getNamedData: initial or after reset
+  if (msg.type === "namedData" && msg.data) {
+    data.pos_x = msg.data.pos_x;
+    data.pos_y = msg.data.pos_y;
+    data.pos_z = msg.data.pos_z;
   }
 });
 
