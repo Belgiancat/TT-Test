@@ -1,7 +1,7 @@
 const results = document.querySelector("#result");
 const recordBtn = document.querySelector("#record");
 const toggleBtn = document.querySelector("#toggle");
-const resetBtn = document.querySelector("#reset");
+const resetBtn = document.querySelector("reset");
 
 let data = {};
 const posList = [];            // recorded points with distances
@@ -11,10 +11,7 @@ let currentSolutionIndex = 0;  // which solution is currently displayed
 // --- vector helper functions ---
 function vecSub(a, b) { return { x: b.x - a.x, y: b.y - a.y, z: b.z - a.z }; }
 function vecAdd(v1, v2) { return { x: v1.x + v2.x, y: v1.y + v2.y, z: v1.z + v2.z }; }
-function vecScale(v, s) {
-  // Correctly scale vector v by scalar s
-  return { x: v.x * s, y: v.y * s, z: v.z * s };
-}
+function vecScale(v, s) { return { x: v.x * s, y: v.y * s, z: v.z * s }; }
 function vecDot(v1, v2) { return v1.x * v2.x + v1.y * v2.y + v1.z * v2.z; }
 function vecCross(v1, v2) {
   return {
@@ -26,15 +23,10 @@ function vecCross(v1, v2) {
 function vecLength(v) { return Math.sqrt(vecDot(v, v)); }
 function vecNormalize(v) { const len = vecLength(v); return vecScale(v, 1 / len); }
 
-// message listener to get pos_x, pos_y, pos_z from measurement messages
+// message listener to get pos_x, pos_y, pos_z
 window.addEventListener("message", (event) => {
-  // Only handle messages of type 'measurement'
-  if (event.data && event.data.type === "measurement") {
-    // Extract position and distance data
-    data.pos_x = event.data.pos_x;
-    data.pos_y = event.data.pos_y;
-    data.pos_z = event.data.pos_z;
-    // Note: distance is read when clicking record button from the input field
+  if (!Array.isArray(event.data.data)) {
+    data = { ...data, ...event.data.data };
   }
 });
 
@@ -56,17 +48,9 @@ recordBtn.addEventListener("click", () => {
 // toggle between the two waypoint solutions
 toggleBtn.addEventListener("click", () => {
   if (solutions.length < 2) return;
+  // flip index
   currentSolutionIndex = 1 - currentSolutionIndex;
   displaySolution(currentSolutionIndex);
-});
-
-// reset everything (points, solutions, UI)
-resetBtn.addEventListener("click", () => {
-  posList.length = 0;
-  solutions = [];
-  currentSolutionIndex = 0;
-  toggleBtn.disabled = true;
-  results.innerHTML = "Reset all recorded points and solutions.";
 });
 
 // main computation: trilateration with two z-roots, degenerate checks, error tolerance
@@ -125,6 +109,10 @@ function computeSolutions() {
 function displaySolution(index) {
   const p = solutions[index];
   results.innerHTML = `Solution ${index + 1}: ${JSON.stringify(p)}`;
-  // Send the chosen waypoint back to parent (FiveM)
-  window.parent.postMessage({ type: "setWaypoint", x: p.x, y: p.y, z: p.z }, "*");
+  window.parent.postMessage({ type: "setWaypoint", ...p }, "*");
 }
+
+resetBtn.addEventListener("click", () => {
+  posList.lenght = 0;
+  results.innerHTML = "You successfully reset you recordings!";
+});
