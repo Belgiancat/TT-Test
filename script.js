@@ -1,6 +1,7 @@
 const results = document.querySelector("#result");
 const recordBtn = document.querySelector("#record");
 const toggleBtn = document.querySelector("#toggle");
+const resetBtn = document.querySelector("#reset");
 
 let data = {};
 const posList = [];            // recorded points with distances
@@ -10,7 +11,7 @@ let currentSolutionIndex = 0;  // which solution is currently displayed
 // --- vector helper functions ---
 function vecSub(a, b) { return { x: b.x - a.x, y: b.y - a.y, z: b.z - a.z }; }
 function vecAdd(v1, v2) { return { x: v1.x + v2.x, y: v1.y + v2.y, z: v1.z + v2.z }; }
-function vecScale(v, s) { return { x: v.x * s, y: v.y * s, z: v.z * s }; }
+function vecScale(v, s) { return { x: v1.x * s, y: v1.y * s, z: v1.z * s }; }
 function vecDot(v1, v2) { return v1.x * v2.x + v1.y * v2.y + v1.z * v2.z; }
 function vecCross(v1, v2) {
   return {
@@ -47,9 +48,17 @@ recordBtn.addEventListener("click", () => {
 // toggle between the two waypoint solutions
 toggleBtn.addEventListener("click", () => {
   if (solutions.length < 2) return;
-  // flip index
   currentSolutionIndex = 1 - currentSolutionIndex;
   displaySolution(currentSolutionIndex);
+});
+
+// reset everything (points, solutions, UI)
+resetBtn.addEventListener("click", () => {
+  posList.length = 0;
+  solutions = [];
+  currentSolutionIndex = 0;
+  toggleBtn.disabled = true;
+  results.innerHTML = "Reset all recorded points and solutions.";
 });
 
 // main computation: trilateration with two z-roots, degenerate checks, error tolerance
