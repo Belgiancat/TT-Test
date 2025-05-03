@@ -45,17 +45,32 @@ recordBtn.addEventListener("click", () => {
   }
 });
 
+// give the user the option to reset the recordings
 resetBtn.addEventListener("click", () => {
-  Object.keys(data).forEach(key => delete data[key]);
-  posList.length = 0;
-  solutions.length = 0;
+  data = {};
+
+  while (posList.length > 0) {
+    posList.pop();
+  }
+  while (solutions.length > 0) {
+    solutions.pop();
+  }
+
   currentSolutionIndex = 0;
   results.innerHTML = "Reset complete.";
   toggleBtn.disabled = true;
+
+  document.querySelector("#distance").value = "";
+  window.parent.postMessage({ type: "setWaypoint", x: 0, y: 0, z: 0 }, "*");
 });
+
 
 // toggle between the two waypoint solutions
 toggleBtn.addEventListener("click", () => {
+  if (solutions.length < 2) {
+    console.log("Not enough solutions to toggle");
+    return;
+  }
   if (solutions.length < 2) return;
   // flip index
   currentSolutionIndex = 1 - currentSolutionIndex;
