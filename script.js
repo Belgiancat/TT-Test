@@ -1,79 +1,81 @@
-// recieve data
-
 const results = document.querySelector("#result");
-
 let data = {};
+const posList = [];
 
+// Receive data from parent
 window.addEventListener("message", (event) => {
   if (!Array.isArray(event.data.data)) {
     data = { ...data, ...event.data.data };
-    // document.querySelector("#result").innerHTML = JSON.stringify(data, null, 2);
   }
 });
 
+// Request initial position data on load
 window.addEventListener("load", () => {
-  window.parent.postMessage({ type: "getNamedData", keys: ["pos_x", "pos_y", "pos_z"] }, "*");
+  window.parent.postMessage(
+    { type: "getNamedData", keys: ["pos_x", "pos_y", "pos_z"] },
+    "*"
+  );
 });
 
-
-// record data
-
-const posList = [];
-
-document.querySelector("#record").addEventListener("click", () => {
+// Record current position with distance
+const recordBtn = document.querySelector("#record");
+recordBtn.addEventListener("click", () => {
   const distance = parseFloat(document.querySelector("#distance").value);
-  posList.push({ x: data.pos_x, y: data.pos_y, z: data.pos_z, d: distance });
-  results.innerHTML = "You have " + JSON.stringify(posList.length, null, 2) + " listings recorded";
-  if (posList.length > 2) { calc(); };
-});
-
-// math
-
-function calc() {
-  const [s1, s2, s3] = posList;
-  const toVec = (a, b) => [b.x - a.x, b.y - a.y, b.z - a.z];
-  const dot = (v1, v2) => v1.reduce((sum, v, i) => sum + v * v2[i], 0);
-  const cross = (v1, v2) => [
-    v1[1] * v2[2] - v1[2] * v2[1],
-    v1[2] * v2[0] - v1[0] * v2[2],
-    v1[0] * v2[1] - v1[1] * v2[0]
-  ];
-
-  // Step 1: Define coordinate system
-  const ex = toVec(s1, s2);
-  const d = Math.hypot(...ex);
-  const exNorm = ex.map(e => e / d);
-
-  const i = dot(exNorm, toVec(s1, s3));
-  const temp = toVec(s1, s3).map((val, idx) => val - i * exNorm[idx]);
-
-  const ey = temp.map(val => val / Math.hypot(...temp));
-  const ez = cross(exNorm, ey);
-
-  const j = dot(ey, toVec(s1, s3));
-
-  // Step 2: Solve for coordinates
-  const x = (s1.d ** 2 - s2.d ** 2 + d ** 2) / (2 * d);
-  const y = (s1.d ** 2 - s3.d ** 2 + i ** 2 + j ** 2 - 2 * i * x) / (2 * j);
-  const zSquare = s1.d ** 2 - x ** 2 - y ** 2;
-
-  if (zSquare < 0) {
-    results.innerHTML = "No real intersection, the listings have been cleared. Try again!";
-    posList.length = 0;
+  if (isNaN(distance)) {
+    results.innerHTML = "Please enter a valid distance.";
     return;
   }
 
-  const z = Math.sqrt(zSquare);
+  posList.push({ x: data.pos_x, y: data.pos_y, z: data.pos_z, d: distance });
+  results.innerHTML = `You have ${posList.length} listings recorded`;
 
-  // Compute result in original coordinate system
-  const intersection = {
-    x: s1.x + x * exNorm[0] + y * ey[0] + z * ez[0],
-    y: s1.y + x * exNorm[1] + y * ey[1] + z * ez[1],
-    z: s1.z + x * exNorm[2] + y * ey[2] + z * ez[2]
-  };
+  if (posList.length >= 4) calcLeastSquares();
+});
 
-  results.innerHTML = "The coordinates are at " + JSON.stringify(intersection, null, 2);
+// Least Squares Trilateration (requires >= 4 positions)
+function calcLeastSquares() {
+  const A = [];
+  const b = [];
+  const ref = posList[0];
 
-  window.parent.postMessage({ type: "setWaypoint", ...intersection }, "*");
-  posList.length = 0;
+  for (let i = 1; i < posList.length; i++) {
+    const pi = posList[i];
+    const xi = pi.x - ref.x;
+    const yi = pi.y - ref.y;
+    const zi = pi.z - ref.z;
+    const di2 = pi.d ** 2 - ref.d ** 2;
+    const ri2 = xi ** 2 + yi ** 2 + zi ** 2;
+
+    // Matrix row for linear system
+    A.push([2 * xi, 2 * yi, 2 * zi]);
+    b.push([di2 - ri2]);
+  }
+
+  try {
+    // Solve using pseudo-inverse A⁺ = (AᵗA)^(-1)Aᵗ * b
+    const At = math.transpose(A);
+    const AtA = math.multiply(At, A);
+    const Atb = math.multiply(At, b);
+    const solution = math.multiply(math.inv(AtA), Atb);
+
+    // Add offset back from reference point
+    const intersection = {
+      x: ref.x + solution[0][0],
+      y: ref.y + solution[1][0],
+      z: ref.z + solution[2][0]
+    };
+
+    results.innerHTML =
+      "The coordinates are at " + JSON.stringify(intersection, null, 2);
+
+    window.parent.postMessage(
+      { type: "setWaypoint", ...intersection },
+      "*"
+    );
+  } catch (err) {
+    results.innerHTML = "Error in computation: " + err.message;
+  }
+
+  // Clear list after calc
+  posList.splice(0);
 }
