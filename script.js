@@ -1,14 +1,15 @@
 const results = document.querySelector("#result");
+const distanceInput = document.querySelector("#distance");
 const recordBtn = document.querySelector("#record");
 const toggleBtn = document.querySelector("#toggle");
-const resetBtn = document.querySelector("reset");
+const resetBtn = document.querySelector("#reset");
 
 let data = {};
-const posList = [];            // recorded points with distances
-let solutions = [];           // stores the two intersection solutions
-let currentSolutionIndex = 0;  // which solution is currently displayed
+const posList = [];        // stored measurements: { x,y,z,d }
+let solutions = [];        // two possible intersection points
+let currentSolutionIndex = 0;
 
-// --- vector helper functions ---
+// — Vector operations —
 function vecSub(a, b) { return { x: b.x - a.x, y: b.y - a.y, z: b.z - a.z }; }
 function vecAdd(v1, v2) { return { x: v1.x + v2.x, y: v1.y + v2.y, z: v1.z + v2.z }; }
 function vecScale(v, s) { return { x: v.x * s, y: v.y * s, z: v.z * s }; }
@@ -23,96 +24,98 @@ function vecCross(v1, v2) {
 function vecLength(v) { return Math.sqrt(vecDot(v, v)); }
 function vecNormalize(v) { const len = vecLength(v); return vecScale(v, 1 / len); }
 
-// message listener to get pos_x, pos_y, pos_z
+// Listen for measurement data from FiveM
 window.addEventListener("message", (event) => {
-  if (!Array.isArray(event.data.data)) {
-    data = { ...data, ...event.data.data };
+  if (event.data && event.data.type === "measurement") {
+    data.pos_x = event.data.pos_x;
+    data.pos_y = event.data.pos_y;
+    data.pos_z = event.data.pos_z;
   }
 });
 
-// request named data from parent
+// Request initial position data on load
 window.addEventListener("load", () => {
   window.parent.postMessage({ type: "getNamedData", keys: ["pos_x", "pos_y", "pos_z"] }, "*");
 });
 
-// record current point + distance
+// Record a measurement when the user clicks "Record"
 recordBtn.addEventListener("click", () => {
-  const distance = parseFloat(document.querySelector("#distance").value);
-  posList.push({ x: data.pos_x, y: data.pos_y, z: data.pos_z, d: distance });
-  results.innerHTML = `Recorded ${posList.length} points.`;
-  if (posList.length >= 3) {
-    computeSolutions();
+  const d = parseFloat(distanceInput.value);
+  if (isNaN(d)) {
+    results.innerHTML = "Enter a valid distance before recording.";
+    return;
   }
+  posList.push({ x: data.pos_x, y: data.pos_y, z: data.pos_z, d });
+  results.innerHTML = `Recorded ${posList.length} point(s).`;
+  if (posList.length >= 3) computeSolutions();
 });
 
-// toggle between the two waypoint solutions
+// Toggle between the two computed waypoints
 toggleBtn.addEventListener("click", () => {
   if (solutions.length < 2) return;
-  // flip index
   currentSolutionIndex = 1 - currentSolutionIndex;
   displaySolution(currentSolutionIndex);
 });
 
-// main computation: trilateration with two z-roots, degenerate checks, error tolerance
+// Reset all recorded data and UI
+resetBtn.addEventListener("click", () => {
+  posList.length = 0;
+  solutions = [];
+  currentSolutionIndex = 0;
+  toggleBtn.disabled = true;
+  distanceInput.value = "";
+  data = {};
+  results.innerHTML = "All data cleared.";
+  // Inform FiveM to clear any existing waypoint
+  window.parent.postMessage({ type: "clearWaypoint" }, "*");
+});
+
+// Compute the two possible intersection points of three spheres
 function computeSolutions() {
   const [s1, s2, s3] = posList;
 
-  // 1) build orthonormal basis
+  // Build orthonormal basis (ex, ey, ez)
   const rawEx = vecSub(s1, s2);
   const d = vecLength(rawEx);
-  if (d < 1e-6) {
-    results.innerHTML = "Points s1 and s2 are too close or identical.";
-    return;
-  }
+  if (d < 1e-6) { results.innerHTML = "Points 1 and 2 are too close."; return; }
   const ex = vecNormalize(rawEx);
 
   const s1to3 = vecSub(s1, s3);
   const i = vecDot(ex, s1to3);
-  const orthToEx = vecSub(s1to3, vecScale(ex, i));
-  const eyLength = vecLength(orthToEx);
-  if (eyLength < 1e-6) {
-    results.innerHTML = "Points are nearly colinear—please record a different third point.";
-    posList.length = 0;
-    return;
-  }
-  const ey = vecNormalize(orthToEx);
+  const proj = vecScale(ex, i);
+  const orth = vecSub({ x: 0, y: 0, z: 0 }, { x: 0, y: 0, z: 0 });
+  // subtract proj from s1to3
+  orth.x = s1to3.x - proj.x;
+  orth.y = s1to3.y - proj.y;
+  orth.z = s1to3.z - proj.z;
+
+  if (vecLength(orth) < 1e-6) { results.innerHTML = "Points are colinear."; posList.length = 0; return; }
+  const ey = vecNormalize(orth);
   const ez = vecCross(ex, ey);
   const j = vecDot(ey, s1to3);
 
-  // 2) solve for local coords x, y, z
-  const r1 = s1.d, r2 = s2.d, r3 = s3.d;
+  // Solve local coordinates (x, y, z)
+  const [r1, r2, r3] = [s1.d, s2.d, s3.d];
   const x = (r1 * r1 - r2 * r2 + d * d) / (2 * d);
   const y = (r1 * r1 - r3 * r3 + i * i + j * j - 2 * i * x) / (2 * j);
-
   const z2 = r1 * r1 - x * x - y * y;
-  if (z2 < 0) {
-    results.innerHTML = "No real intersection (inconsistent distances).";
-    posList.length = 0;
-    return;
-  }
-
-  // two possible z-roots
+  if (z2 < 0) { results.innerHTML = "Inconsistent distances."; posList.length = 0; return; }
   const zPos = Math.sqrt(z2);
   const zNeg = -zPos;
 
-  // build both world-space solutions
+  // Two candidate world points
   const solA = vecAdd(vecAdd(s1, vecScale(ex, x)), vecAdd(vecScale(ey, y), vecScale(ez, zPos)));
   const solB = vecAdd(vecAdd(s1, vecScale(ex, x)), vecAdd(vecScale(ey, y), vecScale(ez, zNeg)));
 
   solutions = [solA, solB];
-  currentSolutionIndex = 0;
   toggleBtn.disabled = false;
   displaySolution(0);
 }
 
-// display solution[index] in UI and postMessage
-function displaySolution(index) {
-  const p = solutions[index];
-  results.innerHTML = `Solution ${index + 1}: ${JSON.stringify(p)}`;
-  window.parent.postMessage({ type: "setWaypoint", ...p }, "*");
+// Display and send a solution to FiveM
+function displaySolution(idx) {
+  const p = solutions[idx];
+  results.innerHTML = `Solution ${idx + 1}: ${JSON.stringify(p)}`;
+  // Send setWaypoint message
+  window.parent.postMessage({ type: "setWaypoint", x: p.x, y: p.y, z: p.z }, "*");
 }
-
-resetBtn.addEventListener("click", () => {
-  posList.lenght = 0;
-  results.innerHTML = "You successfully reset you recordings!";
-});
