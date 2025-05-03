@@ -1,79 +1,112 @@
-// recieve data
-
 const results = document.querySelector("#result");
+const recordBtn = document.querySelector("#record");
+const toggleBtn = document.querySelector("#toggle");
 
 let data = {};
+const posList = [];            // recorded points with distances
+let solutions = [];           // stores the two intersection solutions
+let currentSolutionIndex = 0;  // which solution is currently displayed
 
+// --- vector helper functions ---
+function vecSub(a, b) { return { x: b.x - a.x, y: b.y - a.y, z: b.z - a.z }; }
+function vecAdd(v1, v2) { return { x: v1.x + v2.x, y: v1.y + v2.y, z: v1.z + v2.z }; }
+function vecScale(v, s) { return { x: v.x * s, y: v.y * s, z: v.z * s }; }
+function vecDot(v1, v2) { return v1.x * v2.x + v1.y * v2.y + v1.z * v2.z; }
+function vecCross(v1, v2) {
+  return {
+    x: v1.y * v2.z - v1.z * v2.y,
+    y: v1.z * v2.x - v1.x * v2.z,
+    z: v1.x * v2.y - v1.y * v2.x
+  };
+}
+function vecLength(v) { return Math.sqrt(vecDot(v, v)); }
+function vecNormalize(v) { const len = vecLength(v); return vecScale(v, 1 / len); }
+
+// message listener to get pos_x, pos_y, pos_z
 window.addEventListener("message", (event) => {
   if (!Array.isArray(event.data.data)) {
     data = { ...data, ...event.data.data };
-    // document.querySelector("#result").innerHTML = JSON.stringify(data, null, 2);
   }
 });
 
+// request named data from parent
 window.addEventListener("load", () => {
   window.parent.postMessage({ type: "getNamedData", keys: ["pos_x", "pos_y", "pos_z"] }, "*");
 });
 
-
-// record data
-
-const posList = [];
-
-document.querySelector("#record").addEventListener("click", () => {
+// record current point + distance
+recordBtn.addEventListener("click", () => {
   const distance = parseFloat(document.querySelector("#distance").value);
   posList.push({ x: data.pos_x, y: data.pos_y, z: data.pos_z, d: distance });
-  results.innerHTML = "You have " + JSON.stringify(posList.length, null, 2) + " listings recorded";
-  if (posList.length > 2) { calc(); };
+  results.innerHTML = `Recorded ${posList.length} points.`;
+  if (posList.length >= 3) {
+    computeSolutions();
+  }
 });
 
-// math
+// toggle between the two waypoint solutions
+toggleBtn.addEventListener("click", () => {
+  if (solutions.length < 2) return;
+  // flip index
+  currentSolutionIndex = 1 - currentSolutionIndex;
+  displaySolution(currentSolutionIndex);
+});
 
-function calc() {
+// main computation: trilateration with two z-roots, degenerate checks, error tolerance
+function computeSolutions() {
   const [s1, s2, s3] = posList;
-  const toVec = (a, b) => [b.x - a.x, b.y - a.y, b.z - a.z];
-  const dot = (v1, v2) => v1.reduce((sum, v, i) => sum + v * v2[i], 0);
-  const cross = (v1, v2) => [
-    v1[1] * v2[2] - v1[2] * v2[1],
-    v1[2] * v2[0] - v1[0] * v2[2],
-    v1[0] * v2[1] - v1[1] * v2[0]
-  ];
 
-  // Step 1: Define coordinate system
-  const ex = toVec(s1, s2);
-  const d = Math.hypot(...ex);
-  const exNorm = ex.map(e => e / d);
+  // 1) build orthonormal basis
+  const rawEx = vecSub(s1, s2);
+  const d = vecLength(rawEx);
+  if (d < 1e-6) {
+    results.innerHTML = "Points s1 and s2 are too close or identical.";
+    return;
+  }
+  const ex = vecNormalize(rawEx);
 
-  const i = dot(exNorm, toVec(s1, s3));
-  const temp = toVec(s1, s3).map((val, idx) => val - i * exNorm[idx]);
+  const s1to3 = vecSub(s1, s3);
+  const i = vecDot(ex, s1to3);
+  const orthToEx = vecSub(s1to3, vecScale(ex, i));
+  const eyLength = vecLength(orthToEx);
+  if (eyLength < 1e-6) {
+    results.innerHTML = "Points are nearly colinear—please record a different third point.";
+    posList.length = 0;
+    return;
+  }
+  const ey = vecNormalize(orthToEx);
+  const ez = vecCross(ex, ey);
+  const j = vecDot(ey, s1to3);
 
-  const ey = temp.map(val => val / Math.hypot(...temp));
-  const ez = cross(exNorm, ey);
+  // 2) solve for local coords x, y, z
+  const r1 = s1.d, r2 = s2.d, r3 = s3.d;
+  const x = (r1 * r1 - r2 * r2 + d * d) / (2 * d);
+  const y = (r1 * r1 - r3 * r3 + i * i + j * j - 2 * i * x) / (2 * j);
 
-  const j = dot(ey, toVec(s1, s3));
-
-  // Step 2: Solve for coordinates
-  const x = (s1.d ** 2 - s2.d ** 2 + d ** 2) / (2 * d);
-  const y = (s1.d ** 2 - s3.d ** 2 + i ** 2 + j ** 2 - 2 * i * x) / (2 * j);
-  const zSquare = s1.d ** 2 - x ** 2 - y ** 2;
-
-  if (zSquare < 0) {
-    results.innerHTML = "No real intersection, the listings have been cleared. Try again!";
-    posList.splice(0);
+  const z2 = r1 * r1 - x * x - y * y;
+  if (z2 < 0) {
+    results.innerHTML = "No real intersection (inconsistent distances).";
+    posList.length = 0;
     return;
   }
 
-  const z = Math.sqrt(zSquare);
+  // two possible z-roots
+  const zPos = Math.sqrt(z2);
+  const zNeg = -zPos;
 
-  // Compute result in original coordinate system
-  const intersection = {
-    x: s1.x + x * exNorm[0] + y * ey[0] + z * ez[0],
-    y: s1.y + x * exNorm[1] + y * ey[1] + z * ez[1],
-    z: s1.z + x * exNorm[2] + y * ey[2] + z * ez[2]
-  };
+  // build both world-space solutions
+  const solA = vecAdd(vecAdd(s1, vecScale(ex, x)), vecAdd(vecScale(ey, y), vecScale(ez, zPos)));
+  const solB = vecAdd(vecAdd(s1, vecScale(ex, x)), vecAdd(vecScale(ey, y), vecScale(ez, zNeg)));
 
-  results.innerHTML = "The coordinates are at " + JSON.stringify(intersection, null, 2);
+  solutions = [solA, solB];
+  currentSolutionIndex = 0;
+  toggleBtn.disabled = false;
+  displaySolution(0);
+}
 
-  window.parent.postMessage({ type: "setWaypoint", ...intersection }, "*");
-  posList.splice(0);
+// display solution[index] in UI and postMessage
+function displaySolution(index) {
+  const p = solutions[index];
+  results.innerHTML = `Solution ${index + 1}: ${JSON.stringify(p)}`;
+  window.parent.postMessage({ type: "setWaypoint", ...p }, "*");
 }
