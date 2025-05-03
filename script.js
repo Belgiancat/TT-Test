@@ -11,7 +11,10 @@ let currentSolutionIndex = 0;  // which solution is currently displayed
 // --- vector helper functions ---
 function vecSub(a, b) { return { x: b.x - a.x, y: b.y - a.y, z: b.z - a.z }; }
 function vecAdd(v1, v2) { return { x: v1.x + v2.x, y: v1.y + v2.y, z: v1.z + v2.z }; }
-function vecScale(v, s) { return { x: v1.x * s, y: v1.y * s, z: v1.z * s }; }
+function vecScale(v, s) {
+  // Correctly scale vector v by scalar s
+  return { x: v.x * s, y: v.y * s, z: v.z * s };
+}
 function vecDot(v1, v2) { return v1.x * v2.x + v1.y * v2.y + v1.z * v2.z; }
 function vecCross(v1, v2) {
   return {
@@ -117,5 +120,6 @@ function computeSolutions() {
 function displaySolution(index) {
   const p = solutions[index];
   results.innerHTML = `Solution ${index + 1}: ${JSON.stringify(p)}`;
-  window.parent.postMessage({ type: "setWaypoint", ...p }, "*");
+  // Send the chosen waypoint back to parent (FiveM)
+  window.parent.postMessage({ type: "setWaypoint", x: p.x, y: p.y, z: p.z }, "*");
 }
