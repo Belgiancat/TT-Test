@@ -26,10 +26,15 @@ function vecCross(v1, v2) {
 function vecLength(v) { return Math.sqrt(vecDot(v, v)); }
 function vecNormalize(v) { const len = vecLength(v); return vecScale(v, 1 / len); }
 
-// message listener to get pos_x, pos_y, pos_z
+// message listener to get pos_x, pos_y, pos_z from measurement messages
 window.addEventListener("message", (event) => {
-  if (!Array.isArray(event.data.data)) {
-    data = { ...data, ...event.data.data };
+  // Only handle messages of type 'measurement'
+  if (event.data && event.data.type === "measurement") {
+    // Extract position and distance data
+    data.pos_x = event.data.pos_x;
+    data.pos_y = event.data.pos_y;
+    data.pos_z = event.data.pos_z;
+    // Note: distance is read when clicking record button from the input field
   }
 });
 
