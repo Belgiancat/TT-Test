@@ -4,7 +4,7 @@ const recordBtn = document.querySelector("#record");
 const toggleBtn = document.querySelector("#toggle");
 const resetBtn = document.querySelector("#reset");
 
-let data = {};
+let data = {}; // keep last known position until new measurement arrives; do not clear data here
 const posList = [];        // stored measurements: { x,y,z,d }
 let solutions = [];        // two possible intersection points
 let currentSolutionIndex = 0;
