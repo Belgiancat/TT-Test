@@ -66,8 +66,12 @@ resetBtn.addEventListener("click", () => {
   distanceInput.value = "";
   data = {};
   results.innerHTML = "All data cleared.";
+
   // Inform FiveM to clear any existing waypoint
   window.parent.postMessage({ type: "clearWaypoint" }, "*");
+
+  // Request fresh position data for next measurements
+  window.parent.postMessage({ type: "getNamedData", keys: ["pos_x", "pos_y", "pos_z"] }, "*");
 });
 
 // Compute the two possible intersection points of three spheres
