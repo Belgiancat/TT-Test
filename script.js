@@ -64,7 +64,7 @@ resetBtn.addEventListener("click", () => {
   currentSolutionIndex = 0;
   toggleBtn.disabled = true;
   distanceInput.value = "";
-  data = {};
+  // Do not clear `data` here, so the last known position remains available
   results.innerHTML = "All data cleared.";
 
   // Inform FiveM to clear any existing waypoint
