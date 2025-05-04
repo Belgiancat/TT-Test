@@ -26,7 +26,7 @@ function vecNormalize(v) { const len = vecLength(v); return vecScale(v, 1 / len)
 // message listener to get pos_x, pos_y, pos_z
 window.addEventListener("message", (event) => {
   if (!Array.isArray(event.data.data)) {
-    data = { ...data, ...event.data.data };
+    data = event.data.data;
   }
 });
 
@@ -37,7 +37,15 @@ window.addEventListener("load", () => {
 
 // record current point + distance
 recordBtn.addEventListener("click", () => {
+  if (posList.length >= 3) {
+    results.innerHTML = "Already recorded 3 points. Please reset to try again.";
+    return;
+  }
   const distance = parseFloat(document.querySelector("#distance").value);
+  if (isNaN(distance) || distance <= 0) {
+    results.innerHTML = "Please enter a valid positive distance.";
+    return;
+  }
   posList.push({ x: data.pos_x, y: data.pos_y, z: data.pos_z, d: distance });
   results.innerHTML = `Recorded ${posList.length} points.`;
   if (posList.length >= 3) {
@@ -45,47 +53,43 @@ recordBtn.addEventListener("click", () => {
   }
 });
 
-// give the user the option to reset the recordings
-resetBtn.addEventListener("click", () => {
-  data = {};
-
-  while (posList.length > 0) {
-    posList.pop();
-  }
-  while (solutions.length > 0) {
-    solutions.pop();
-  }
-
-  currentSolutionIndex = 0;
-  results.innerHTML = "Reset complete.";
-  toggleBtn.disabled = true;
-
-  document.querySelector("#distance").value = "";
-  window.parent.postMessage({ type: "setWaypoint", x: 0, y: 0, z: 0 }, "*");
-});
-
-
 // toggle between the two waypoint solutions
 toggleBtn.addEventListener("click", () => {
   if (solutions.length < 2) {
     console.log("Not enough solutions to toggle");
     return;
   }
-  if (solutions.length < 2) return;
-  // flip index
   currentSolutionIndex = 1 - currentSolutionIndex;
   displaySolution(currentSolutionIndex);
 });
+
+// give the user the option to reset the recordings
+resetBtn.addEventListener("click", () => {
+  resetState();
+});
+
+// Reset helper function
+function resetState(msg = "Reset complete.") {
+  posList.length = 0;
+  solutions.length = 0;
+  currentSolutionIndex = 0;
+
+  results.innerHTML = msg;
+  toggleBtn.disabled = true;
+  recordBtn.disabled = false;
+  document.querySelector("#distance").value = "";
+
+  window.parent.postMessage({ type: "setWaypoint", x: null, y: null, z: null }, "*");
+}
 
 // main computation: trilateration with two z-roots, degenerate checks, error tolerance
 function computeSolutions() {
   const [s1, s2, s3] = posList;
 
-  // 1) build orthonormal basis
   const rawEx = vecSub(s1, s2);
   const d = vecLength(rawEx);
   if (d < 1e-6) {
-    results.innerHTML = "Points s1 and s2 are too close or identical.";
+    resetState("Points s1 and s2 are too close or identical. Reset triggered.");
     return;
   }
   const ex = vecNormalize(rawEx);
@@ -95,31 +99,26 @@ function computeSolutions() {
   const orthToEx = vecSub(s1to3, vecScale(ex, i));
   const eyLength = vecLength(orthToEx);
   if (eyLength < 1e-6) {
-    results.innerHTML = "Points are nearly colinear—please record a different third point.";
-    posList.length = 0;
+    resetState("Points are nearly colinear. Reset triggered.");
     return;
   }
   const ey = vecNormalize(orthToEx);
   const ez = vecCross(ex, ey);
   const j = vecDot(ey, s1to3);
 
-  // 2) solve for local coords x, y, z
   const r1 = s1.d, r2 = s2.d, r3 = s3.d;
   const x = (r1 * r1 - r2 * r2 + d * d) / (2 * d);
   const y = (r1 * r1 - r3 * r3 + i * i + j * j - 2 * i * x) / (2 * j);
 
   const z2 = r1 * r1 - x * x - y * y;
   if (z2 < 0) {
-    results.innerHTML = "No real intersection (inconsistent distances).";
-    posList.length = 0;
+    resetState("No real intersection (inconsistent distances). Reset triggered.");
     return;
   }
 
-  // two possible z-roots
   const zPos = Math.sqrt(z2);
   const zNeg = -zPos;
 
-  // build both world-space solutions
   const solA = vecAdd(vecAdd(s1, vecScale(ex, x)), vecAdd(vecScale(ey, y), vecScale(ez, zPos)));
   const solB = vecAdd(vecAdd(s1, vecScale(ex, x)), vecAdd(vecScale(ey, y), vecScale(ez, zNeg)));
 
