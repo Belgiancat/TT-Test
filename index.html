@@ -15,15 +15,91 @@
         </details>
     </div>
     <script>
-        // Example button actions showcasing what can be done
+        // Example button actions showcasing what can be done {x: 407.8385009765625, y: 7227.65771484375}
         const actions = [
             {
                 name: "Paleto Bay Shipyard",
-                action: {type: "setWaypoint", x: 407, y: 7227}
+                action: {type: "setWaypoint", x: 407, y: 7227},
             }
-                     
         ];
-      
+        for (const action of actions) {
+            const button = document.createElement("button");
+            button.textContent = action.name;
+            button.onclick = () => {
+                window.parent.postMessage(action.action, "*");
+            };
+            document.querySelector("#buttons").appendChild(button);
+        }
+
+        // It is recommended to have a button to close the window
+        // This is a simple example of how to do it
+        const escapeListener = (e) => {
+            if (e.key === "Escape") {
+                // Pin the window, meaning we give control back to the game
+                window.parent.postMessage({type: "pin"}, "*");
+            }
+        };
+        window.addEventListener('keydown', escapeListener);
+
+        // Restrict length of data on screen, to avoid flooding the screen
+        const trunc = (str, len) => {
+            len = len || 50;
+            if (str.length > len) {
+                return str.substring(0, len) + "...";
+            }
+            return str;
+        };
+
+        // The game client will send data that we can handle
+        // Data is sent as key/value pairs in event.data.data
+        // The client only sends data that has changed, unless getData is requested, in which case all cached data is sent
+        window.addEventListener("message", (event) => {
+            const evt = event.data;
+            // Display all data key/value pairs in a table
+            for (const key in evt.data)
+            {
+                let found = false;
+                // Update the existing entries so we don't have duplicates
+                for (const row of document.querySelector("#data").children)
+                {
+                    if (row.children[0].textContent === key)
+                    {
+                        row.children[1].textContent = trunc(evt.data[key]);
+                        found = true;
+                        break;
+                    }
+                }
+                if (found) continue;
+                const row = document.createElement("tr");
+                const c1 = document.createElement("td");
+                const c2 = document.createElement("td");
+                c1.textContent = key;
+                c2.textContent = trunc(evt.data[key]);
+                row.appendChild(c1);
+                row.appendChild(c2);
+                document.querySelector("#data").appendChild(row);
+            }
+            // Example handling for the default bindable keys
+            // The command userapp_trigger <key> can be bound manually
+            // trigger_ is prepended to the key name to avoid conflicts
+            for (const key in evt.data)
+            {
+                if (key == "trigger_square") {
+                    console.log("Square pressed!");
+                    window.parent.postMessage({type: "notification", text: "Square pressed!"}, "*");
+                } else if (key == "trigger_circle") {
+                    console.log("Circle pressed!");
+                    window.parent.postMessage({type: "notification", text: "Circle pressed!"}, "*");
+                } else if (key == "trigger_triangle") {
+                    console.log("Triangle pressed!");
+                    window.parent.postMessage({type: "notification", text: "Triangle pressed!"}, "*");
+                } else if (key == "trigger_cross") {
+                    console.log("Cross pressed!");
+                    window.parent.postMessage({type: "notification", text: "Cross pressed!"}, "*");
+                }
+            }
+        });
+    </script>
     <style>
         summary {
             background-color: white;
@@ -36,8 +112,5 @@
             background-color: #f1f1f1;
             border: 1px solid black;
         }
-    </script>
     </style>
 </html>
-
-      
