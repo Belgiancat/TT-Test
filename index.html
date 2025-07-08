@@ -2,17 +2,6 @@
     <title>Test Application</title>
     <div style="left: 50%; transform: translateX(-50%); position: fixed;">
         <ul id="buttons"></ul>
-        <details style="width: fit-content; min-width: 100px;">
-            <summary>Cached Data</summary>
-            <div style="max-height: 80vh; overflow-y: auto;">
-                <table id="data">
-                    <tr>
-                        <th>Key</th>
-                        <th>Value</th>
-                    </tr>
-                </table>
-            </div>
-        </details>
     </div>
     <script>
         // Example button actions showcasing what can be done {x: 407.8385009765625, y: 7227.65771484375}
@@ -50,55 +39,7 @@
             return str;
         };
 
-        // The game client will send data that we can handle
-        // Data is sent as key/value pairs in event.data.data
-        // The client only sends data that has changed, unless getData is requested, in which case all cached data is sent
-        window.addEventListener("message", (event) => {
-            const evt = event.data;
-            // Display all data key/value pairs in a table
-            for (const key in evt.data)
-            {
-                let found = false;
-                // Update the existing entries so we don't have duplicates
-                for (const row of document.querySelector("#data").children)
-                {
-                    if (row.children[0].textContent === key)
-                    {
-                        row.children[1].textContent = trunc(evt.data[key]);
-                        found = true;
-                        break;
-                    }
-                }
-                if (found) continue;
-                const row = document.createElement("tr");
-                const c1 = document.createElement("td");
-                const c2 = document.createElement("td");
-                c1.textContent = key;
-                c2.textContent = trunc(evt.data[key]);
-                row.appendChild(c1);
-                row.appendChild(c2);
-                document.querySelector("#data").appendChild(row);
-            }
-            // Example handling for the default bindable keys
-            // The command userapp_trigger <key> can be bound manually
-            // trigger_ is prepended to the key name to avoid conflicts
-            for (const key in evt.data)
-            {
-                if (key == "trigger_square") {
-                    console.log("Square pressed!");
-                    window.parent.postMessage({type: "notification", text: "Square pressed!"}, "*");
-                } else if (key == "trigger_circle") {
-                    console.log("Circle pressed!");
-                    window.parent.postMessage({type: "notification", text: "Circle pressed!"}, "*");
-                } else if (key == "trigger_triangle") {
-                    console.log("Triangle pressed!");
-                    window.parent.postMessage({type: "notification", text: "Triangle pressed!"}, "*");
-                } else if (key == "trigger_cross") {
-                    console.log("Cross pressed!");
-                    window.parent.postMessage({type: "notification", text: "Cross pressed!"}, "*");
-                }
-            }
-        });
+       
     </script>
     <style>
         summary {
