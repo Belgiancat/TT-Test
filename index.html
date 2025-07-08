@@ -1,54 +1,50 @@
 <html>
     <title>Test Application</title>
-    
-        <script>
-    const actions = [
-        {
-            name: "Paleto Bay Shipyard",
-            action: {type: "setWaypoint", x: 407, y: 7227},
+    <div style="left: 50%; transform: translateX(-50%); position: fixed;">
+        <ul id="buttons"></ul>
+    </div>
+    <script>
+        // Example button actions showcasing what can be done {x: 407.8385009765625, y: 7227.65771484375}
+        const actions = [
+            {
+                name: "Paleto Bay Shipyard",
+                action: {type: "setWaypoint", x: 407, y: 7227},
+            },
+            {
+                name: "Parachute",
+                action: {type: "setWaypoint", x: -744, y: -1509}
+            }
+        ];
+        for (const action of actions) {
+            const button = document.createElement("button");
+            button.textContent = action.name;
+            button.onclick = () => {
+                window.parent.postMessage(action.action, "*");
+            };
+            document.querySelector("#buttons").appendChild(button);
         }
-    ];
 
-    for (const action of actions) {
-        const wrapper = document.createElement("div");
-        wrapper.style.position = "absolute";
-        wrapper.style.top = "100px";  // Starting position
-        wrapper.style.left = "100px";
+        // It is recommended to have a button to close the window
+        // This is a simple example of how to do it
+        const escapeListener = (e) => {
+            if (e.key === "Escape") {
+                // Pin the window, meaning we give control back to the game
+                window.parent.postMessage({type: "pin"}, "*");
+            }
+        };
+        window.addEventListener('keydown', escapeListener);
 
-        const button = document.createElement("button");
-        button.textContent = action.name;
-        button.onclick = () => {
-            window.parent.postMessage(action.action, "*");
+        // Restrict length of data on screen, to avoid flooding the screen
+        const trunc = (str, len) => {
+            len = len || 50;
+            if (str.length > len) {
+                return str.substring(0, len) + "...";
+            }
+            return str;
         };
 
-        wrapper.appendChild(button);
-        document.body.appendChild(wrapper);
-
-        // Add drag functionality
-        let isDragging = false;
-        let offsetX, offsetY;
-
-        wrapper.addEventListener("mousedown", (e) => {
-            isDragging = true;
-            offsetX = e.clientX - wrapper.offsetLeft;
-            offsetY = e.clientY - wrapper.offsetTop;
-            wrapper.style.zIndex = 1000;
-        });
-
-        document.addEventListener("mousemove", (e) => {
-            if (isDragging) {
-                wrapper.style.left = `${e.clientX - offsetX}px`;
-                wrapper.style.top = `${e.clientY - offsetY}px`;
-            }
-        });
-
-        document.addEventListener("mouseup", () => {
-            isDragging = false;
-            wrapper.style.zIndex = "";
-        });
-    }
-</script>
-
+       
+    </script>
     <style>
         summary {
             background-color: white;
